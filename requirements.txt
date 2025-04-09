@@ -1,6 +1,4 @@
 pandas
 numpy
 statistics
-math
-typinh
 jsonpickle
