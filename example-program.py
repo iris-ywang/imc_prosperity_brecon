@@ -75,14 +75,20 @@ class Trader:
 
                 if mid_price < 10000 & position <= 0: # cheap & short, buy
                     bid_price = min(10000, best_bid + 1)
-                    bid_vol = max(10000-bid_price, 5)*10 - position
-                    orders.append(Order(product, bid_price, bid_vol))
-                    print(f"BUY {bid_vol}x {bid_price}\n")
+                    bid_vol_1 = max(10000-bid_price, 5)*5 - position
+                    orders.append(Order(product, bid_price, bid_vol_1))
+                    print(f"BUY {bid_vol_1}x {bid_price}\n")
+                    bid_vol_2 = max(10000-bid_price, 5)*5
+                    orders.append(Order(product, bid_price, bid_vol_2))
+                    print(f"BUY {bid_vol_2}x {bid_price - 1}\n")
                 elif mid_price > 10000 & position >= 0: # expensive & long, sell
                     ask_price = max(10000, best_ask - 1)
-                    ask_vol = max(ask_price-10000, 5)*10 + position
-                    orders.append(Order(product, ask_price, -ask_vol))
-                    print(f"SELL {ask_vol}x {ask_price}\n")
+                    ask_vol_1 = max(ask_price-10000, 5)*5 + position
+                    orders.append(Order(product, ask_price, -ask_vol_1))
+                    print(f"SELL {ask_vol_1}x {ask_price}\n")
+                    ask_vol_2 = max(ask_price-10000, 5)*5
+                    orders.append(Order(product, ask_price+1, -ask_vol_2))
+                    print(f"SELL {ask_vol_2}x {ask_price + 1}\n")
                 result[product] = orders
 
   
