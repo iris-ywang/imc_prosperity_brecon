@@ -14,7 +14,7 @@ class Trader:
         result = {}
 
         # load previous data
-        data = jsonpickle.decode(state.traderData) if state.traderData else {}
+        data = jsonpickle.decode(state.traderData) if state.traderData and state.traderData != 'SAMPLE' else {}
 
         # Iterate over all the keys (the available products) contained in the order dephts
         for product in state.order_depths.keys():
@@ -102,3 +102,17 @@ class Trader:
                 # Depending on the logic above
         
         return result, conversions, traderData
+
+
+# from datamodel import LoadTradingState
+# import pandas as pd
+
+# if __name__ == "__main__":
+#     trader = Trader()
+#     # The run method will be called by the framework
+#     # The code below is just for testing purposes
+#     df = pd.read_csv("./data/round-1-island-data-bottle/prices_round_1_day_0.csv", sep=";")
+
+#     state = LoadTradingState().load_all_products_by_timestamp(df, 0)
+
+#     trader.run(state)
