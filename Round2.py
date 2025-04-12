@@ -155,11 +155,11 @@ class Trader:
 
                     # Trade Djembe
                     if z_pair > djembe_threshold:
-                        # DJEMBE is rich — short it
-                        orders.append(Order("DJEMBES", price_data["DJEMBES_bid"], -vol))
-                    elif z_pair < -djembe_threshold:
-                        # DJEMBE is cheap — long it
+                        # DJEMBES is cheap — long it
                         orders.append(Order("DJEMBES", price_data["DJEMBES_ask"], +vol))
+                    elif z_pair < -djembe_threshold:
+                        # DJEMBES is rich — short it
+                        orders.append(Order("DJEMBES", price_data["DJEMBES_bid"], -vol))
                 for order in orders:
                     result.setdefault(order.product, []).append(order)
 
