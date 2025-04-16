@@ -43,28 +43,78 @@ class Trader:
                 history = data.get("SQUID_INK", [])
                 if len(history) > 10:
                     roll_mean = np.mean(history)
+                    last_price = history[-1]
                     history.pop(0)
-
-                    # compare rolling mean with mid price and skew??
-                    # skew depends on the position
-                    skew = - np.round(position / 10)
-                    price = roll_mean + skew
-                    # # buy if target price is lower than rolling mean
-                    # if mid_price <= price: # cheap, buy
-                    #     bid_price = min(price, best_bid + 1)
-                    #     bid_vol = max(price-bid_price, 5)*5 - position
-                    #     orders.append(Order(product, bid_price, bid_vol))
-                    #     print(f"BUY {bid_vol}x {bid_price}\n")
-                    # # sell if target price is higher than rolling mean
-                    # elif mid_price >= price: # expensive, sell
-                    #     ask_price = max(price, best_ask - 1)
-                    #     ask_vol = max(ask_price-price, 5)*5 + position
-                    #     orders.append(Order(product, ask_price, -ask_vol))
-                    #     print(f"SELL {ask_vol}x {ask_price}\n")
-                    # result[product] = orders
                 
                 history.append(mid_price)
                 data["SQUID_INK"] = history
+
+                if not last_price: continue
+                # check if the price is stable
+                # if abs((mid_price - last_price)/last_price) > 0.0025: continue
+
+                # determine fair price
+                beta = -0.20
+                fair = mid_price + beta * (mid_price - last_price)
+            
+                # slew due to position
+                fair -= np.round(position / 27) # hyperparam
+
+                width = 1
+                limit = 50
+                order_lim = 25
+                bid_vol = ask_vol = 0
+
+                # if the price is good, always take the best order
+                if best_ask <= fair - width:
+                    # buy at the best ask
+                    bid_price = best_ask
+                    bid_vol = min(max(0, min(best_ask_volume, limit - position)), order_lim)
+                    if bid_vol > 0:
+                        self.execute_take_order(product, order_depth, orders, bid_price, bid_vol)
+                        position += bid_vol
+                elif best_bid >= fair + width:
+                    # sell at the best bid
+                    ask_price = best_bid
+                    ask_vol = min(max(0, min(best_bid_volume, limit + position)), order_lim)
+                    if ask_vol >0:
+                        self.execute_take_order(product, order_depth, orders, ask_price, -ask_vol)
+                        position -= ask_vol
+
+                # if there are more orders to take that can reduce the position, take them
+                if position > 0 and len(order_depth.buy_orders) > 0:
+                    best_bid = max(order_depth.buy_orders.keys())
+                    best_bid_volume = order_depth.buy_orders[best_bid]
+                    if best_bid >= fair + width:
+                        ask_price = best_bid
+                        ask_vol = min(max(0, min(best_bid_volume, position)), order_lim)
+                        if ask_vol >0:
+                            self.execute_take_order(product, order_depth, orders, ask_price, -ask_vol)
+                            position -= ask_vol
+                elif position < 0 and len(order_depth.sell_orders) > 0:
+                    best_ask = min(order_depth.sell_orders.keys())
+                    best_ask_volume = -order_depth.sell_orders[best_ask]
+                    if best_ask <= fair - width:
+                        bid_price = best_ask
+                        bid_vol = min(max(0, min(best_ask_volume, -position)), order_lim)
+                        if bid_vol > 0:
+                            self.execute_take_order(product, order_depth, orders, bid_price, bid_vol)
+                            position += bid_vol
+                
+                # market making orders
+                best_ask_above_fair = min([i for i in order_depth.sell_orders.keys() if i > fair+width], default=0)
+                best_bid_below_fair = max([i for i in order_depth.buy_orders.keys() if i < fair-width], default=0)
+
+                if best_ask_above_fair:
+                    sell_mm_vol = min(max(0, limit + position), order_lim)
+                    if sell_mm_vol > 0:
+                        self.execute_marketmaking_order(product, orders, best_ask_above_fair-1, -sell_mm_vol)
+                if best_bid_below_fair:
+                    buy_mm_vol = min(max(0, limit - position), order_lim)
+                    if buy_mm_vol > 0:
+                        self.execute_marketmaking_order(product, orders, best_bid_below_fair+1, buy_mm_vol)
+
+                result[product] = orders
 
 
             elif product == "RAINFOREST_RESIN":
@@ -77,6 +127,7 @@ class Trader:
                 width = 1
                 bid_vol = ask_vol = 0
                 limit = 50
+                order_lim = 50
 
                 # if the price is good, always take the best order
                 if best_ask <= fair - width:
@@ -108,6 +159,65 @@ class Trader:
                         self.execute_marketmaking_order(product, orders, best_bid_below_fair+1, buy_mm_vol)
 
                 result[product] = orders
+
+            elif product == "KELP":
+                history = data.get("KELP", [])
+                last_price = 0
+                if len(history) > 2:
+                    last_price = history[-1]
+                    history.pop(0)
+                
+                history.append(mid_price)
+                data["KELP"] = history
+                if not last_price: continue
+                # check if the price is stable
+                # if abs((mid_price - last_price)/last_price) > 0.0012: continue
+
+                # determine fair price
+                beta = -0.49
+                fair = mid_price + beta * (mid_price - last_price)
+            
+                # slew due to position
+                # overall market trend is up, set a positive position target
+                fair -= np.round((position-35) / 30)
+
+                width = 1
+                limit = 50
+                bid_vol = ask_vol = 0
+                order_lim = 25
+
+                # if the price is good, always take the best order
+                if best_ask <= fair - width:
+                    # buy at the best ask
+                    bid_price = best_ask
+                    bid_vol = min(max(0, min(best_ask_volume, limit - position)), order_lim)
+                    if bid_vol > 0:
+                        self.execute_take_order(product, order_depth, orders, bid_price, bid_vol)
+                        position += bid_vol
+                elif best_bid >= fair + width:
+                    # sell at the best bid
+                    ask_price = best_bid
+                    ask_vol = min(max(0, min(best_bid_volume, limit + position)), order_lim)
+                    if ask_vol >0:
+                        self.execute_take_order(product, order_depth, orders, ask_price, -ask_vol)
+                        position -= ask_vol
+
+                # market making orders
+                best_ask_above_fair = min([i for i in order_depth.sell_orders.keys() if i > fair+width], default=0)
+                best_bid_below_fair = max([i for i in order_depth.buy_orders.keys() if i < fair-width], default=0)
+
+                if best_ask_above_fair:
+                    sell_mm_vol = min(max(0, limit + position), order_lim)
+                    if sell_mm_vol > 0:
+                        self.execute_marketmaking_order(product, orders, best_ask_above_fair-1, -sell_mm_vol)
+                if best_bid_below_fair:
+                    buy_mm_vol = min(max(0, limit - position), order_lim)
+                    if buy_mm_vol > 0:
+                        self.execute_marketmaking_order(product, orders, best_bid_below_fair+1, buy_mm_vol)
+
+                result[product] = orders
+
+                pass
 
   
         traderData = jsonpickle.encode(data)
